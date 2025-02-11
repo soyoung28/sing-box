@@ -19,16 +19,30 @@
 
 * * *
 ## 1.更新信息
-2024.08.06 v1.2.5 Add detection of TCP brutal. Sing-box will not use this module if not installed. 增加 TCP brutal 的检测，如果没有安装，Sing-box 将不使用该模块
+2025.01.31 v1.2.12 In order to prevent sing-box from upgrading to a certain version which may cause errors, add a mandatory version file; 以防止sing-box某个版本升级导致运行报错，增加强制指定版本号文件
 
-2024.05.09 v1.2.4 Add hysteria2 port hopping. Supported Clients: ShadowRocket / NekoBox / Clash; 添加 hysteria2 的跳跃端口，支持客户端: ShadowRocket / NekoBox / Clash
-
-2024.05.06 v1.2.3 Automatically detects native IPv4 and IPv6 for warp-installed machines to minimize interference with warp ip; 对于已安装 warp 机器，自动识别原生的 IPv4 和 IPv6，以减少受 warp ip 的干扰
+2025.01.28 v1.2.11 1. Add server-side time synchronization configuration; 2. Replace some CDNs; 3. Fix the bug of getting the latest version error when upgrading; 1. 添加服务端时间同步配置; 2. 替换某些 CDN; 3. 修复升级时获取最新版本错误的 bu
 
 <details>
     <summary>历史更新 history（点击即可展开或收起）</summary>
 <br>
 
+>2024.12.31 v1.2.10 Adapted v1.11.0-beta.17 to add port hopping for hysteria2 in sing-box client output; 适配 v1.11.0-beta.17，在 sing-box 客户端输出中添加 hysteria2 的端口跳跃
+>
+>2024.12.29 v1.2.9 Refactored the chatGPT detection method based on lmc999's detection and unlocking script; 根据 lmc999 的检测解锁脚本，重构了检测 chatGPT 方法
+>
+>2024.12.10 v1.2.8 Thank you to the veteran player Fan Glider Fangliding for the technical guidance on Warp's routing! 感谢资深玩家 风扇滑翔翼 Fangliding 关于 Warp 的分流的技术指导
+>
+>2024.12.10 v1.2.7 Compatible with Sing-box 1.11.0-beta.8+. Thanks to the PR from brother Maxrxf. I've already given up myself; 适配 Sing-box 1.11.0-beta.8+，感谢 Maxrxf 兄弟的 PR，我自己已经投降的了
+>
+>2024.10.28 v1.2.6 1. Fixed the bug that clash subscription failed when [-n] re-fetches the subscription; 2. vmess + ws encryption changed from none to auto; 3. Replaced a CDN; 1. 修复 [-n] 重新获取订阅时，clash 订阅失效的bug; 2. vmess + ws 加密方式从none改为auto; 3. 更换了一个 CDN
+>
+>2024.08.06 v1.2.5 Add detection of TCP brutal. Sing-box will not use this module if not installed. 增加 TCP brutal 的检测，如果没有安装，Sing-box 将不使用该模块
+>
+>2024.05.09 v1.2.4 Add hysteria2 port hopping. Supported Clients: ShadowRocket / NekoBox / Clash; 添加 hysteria2 的跳跃端口，支持客户端: ShadowRocket / NekoBox / Clash
+>
+>2024.05.06 v1.2.3 Automatically detects native IPv4 and IPv6 for warp-installed machines to minimize interference with warp ip; 对于已安装 warp 机器，自动识别原生的 IPv4 和 IPv6，以减少受 warp ip 的干扰
+>
 >2024.05.03 v1.2.2 Complete 8 non-interactive installation modes, direct output results. Suitable for mass installation scenarios. You can put the commands in the favorites of the ssh software. Please refer to the README.md description for details. 完善8种无交互安装模式，直接输出结果，适合大量装机的情景，可以把命令放在 ssh 软件的收藏夹，详细请参考README.md 说明
 >
 >2024.04.16 v1.2.1 1. Fix the bug of dynamically adding and removing protocols; 2. CentOS 7 add EPEL to install nginx; 1. 修复动态增加和删除协议的 bug; 2. CentOS 7 增加 EPEL 软件仓库，以便安装 Nginx
@@ -485,10 +499,12 @@ services:
 |   `-- private.key                          # SSL/TLS 证书的私钥信息
 |-- conf                                     # sing-box server 配置文件目录
 |   |-- 00_log.json                          # 日志配置文件
-|   |-- 01_outbounds.json                    # 服务端出站配置文件，已加了 warp 账户信息
-|   |-- 02_route.json                        # 路由配置文件，chatGPT 使用 warp ipv6 链式代理出站
-|   |-- 03_experimental.json                 # 缓存配置文件
-|   |-- 04_dns.json                          # DNS 规则文件
+|   |-- 01_outbounds.json                    # 服务端出站配置文件
+|   |-- 02_endpoints.json                    # 配置 endpoints，添加 warp 账户信息配置文件
+|   |-- 03_route.json                        # 路由配置文件，chatGPT 使用 warp ipv6 链式代理出站
+|   |-- 04_experimental.json                 # 缓存配置文件
+|   |-- 05_dns.json                          # DNS 规则文件
+|   |-- 06_ntp.json                          # 服务端时间同步配置文件
 |   |-- 11_xtls-reality_inbounds.json        # Reality vision 协议配置文件
 |   |-- 12_hysteria2_inbounds.json           # Hysteria2 协议配置文件
 |   |-- 13_tuic_inbounds.json                # Tuic V5 协议配置文件 # Hysteria2 协议配置文件
