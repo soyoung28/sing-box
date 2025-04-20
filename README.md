@@ -19,14 +19,23 @@
 
 * * *
 ## 1.更新信息
-2025.01.31 v1.2.12 In order to prevent sing-box from upgrading to a certain version which may cause errors, add a mandatory version file; 以防止sing-box某个版本升级导致运行报错，增加强制指定版本号文件
+2025.04.06 v1.2.16 Use OpenRC on Alpine to replace systemctl (Python3-compatible version); 在 Alpine 系统中使用 OpenRC 取代兼容 Python3 的 systemctl 实现
 
-2025.01.28 v1.2.11 1. Add server-side time synchronization configuration; 2. Replace some CDNs; 3. Fix the bug of getting the latest version error when upgrading; 1. 添加服务端时间同步配置; 2. 替换某些 CDN; 3. 修复升级时获取最新版本错误的 bu
+2025.04.05 v1.2.15 Supports output for clients such as Shadowrocket, Clash Mihomo, and Sing-box; 支持小火箭、Clash Mihomo、Sing-box 客户端输出
+
+2025.03.23 v1.2.14 Added support for the AnyTLS protocol. Thanks to [Betterdoitnow] for providing the configuration; 新增对 AnyTLS 协议的支持，感谢 [Betterdoitnow] 提供的配置
+
 
 <details>
     <summary>历史更新 history（点击即可展开或收起）</summary>
 <br>
 
+>2025.03.18 v1.2.13 Compatible with Sing-box 1.12.0-alpha.18+; 适配 Sing-box 1.12.0-alpha.18+
+>
+>2025.01.31 v1.2.12 In order to prevent sing-box from upgrading to a certain version which may cause errors, add a mandatory version file; 以防止sing-box某个版本升级导致运行报错，增加强制指定版本号文件
+>
+>2025.01.28 v1.2.11 1. Add server-side time synchronization configuration; 2. Replace some CDNs; 3. Fix the bug of getting the latest version error when upgrading; 1. 添加服务端时间同步配置; 2. 替换某些 CDN; 3. 修复升级时获取最新版本错误的 bu
+>
 >2024.12.31 v1.2.10 Adapted v1.11.0-beta.17 to add port hopping for hysteria2 in sing-box client output; 适配 v1.11.0-beta.17，在 sing-box 客户端输出中添加 hysteria2 的端口跳跃
 >
 >2024.12.29 v1.2.9 Refactored the chatGPT detection method based on lmc999's detection and unlocking script; 根据 lmc999 的检测解锁脚本，重构了检测 chatGPT 方法
@@ -97,14 +106,14 @@
 
 ## 2.项目特点:
 
-* 一键部署多协议，可以单选、多选或全选 ShadowTLS v3 / XTLS Reality / Hysteria2 / Tuic V5 / ShadowSocks / Trojan / Vmess + ws / Vless + ws + tls / H2 Reality / gRPC Reality, 总有一款适合你
+* 一键部署多协议，可以单选、多选或全选 ShadowTLS v3 / XTLS Reality / Hysteria2 / Tuic V5 / ShadowSocks / Trojan / Vmess + ws / Vless + ws + tls / H2 Reality / gRPC Reality / AnyTLS, 总有一款适合你
 * 所有协议均不需要域名，可选 Cloudflare Argo Tunnel 内网穿透以支持传统方式为 websocket 的协议
-* 节点信息输出到 V2rayN / Clash Meta / 小火箭 / Nekobox / Sing-box (SFI, SFA, SFM)，订阅自动适配客户端，一个订阅 url 走天下
+* 节点信息输出到 V2rayN / Clash Verge / 小火箭 / Nekobox / Sing-box (SFI, SFA, SFM)，订阅自动适配客户端，一个订阅 url 走天下
 * 自定义端口，适合有限开放端口的 nat 小鸡
 * 内置 warp 链式代理解锁 chatGPT
 * 智能判断操作系统: Ubuntu 、Debian 、CentOS 、Alpine 和 Arch Linux,请务必选择 LTS 系统
 * 支持硬件结构类型: AMD 和 ARM，支持 IPv4 和 IPv6
-* 无交互极速安排模式: 一个回车完成超 10 个协议的安装
+* 无交互极速安排模式: 一个回车完成 11 个协议的安装
 
 
 ## 3.Sing-box for VPS 运行脚本:
@@ -136,7 +145,7 @@ sb
 ## 4.无交互极速安装:
 ### 方式1. KV 配置文件，内容参照本库里的 config
 ```
-bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh) -f config
+bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh) -f config.conf
 ```
 
 ### 方式2. KV 传参，举例
@@ -152,7 +161,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
   --START_PORT 8881 \
   --PORT_NGINX 60000 \
   --SERVER_IP 123.123.123.123 \
-  --CDN dash.cloudflare.com \
+  --CDN skk.moe\
   --VMESS_HOST_DOMAIN vmess.test.com \
   --VLESS_HOST_DOMAIN vless.test.com \
   --UUID_CONFIRM 20f7fca4-86e5-4ddf-9eed-24142073d197 \
@@ -174,7 +183,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
   --START_PORT 8881 \
   --PORT_NGINX 60000 \
   --SERVER_IP 123.123.123.123 \
-  --CDN dash.cloudflare.com \
+  --CDN skk.moe\
   --VMESS_HOST_DOMAIN vmess.test.com \
   --VLESS_HOST_DOMAIN vless.test.com \
   --UUID_CONFIRM 20f7fca4-86e5-4ddf-9eed-24142073d197 \
@@ -194,7 +203,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
   --START_PORT 8881 \
   --PORT_NGINX 60000 \
   --SERVER_IP 123.123.123.123 \
-  --CDN dash.cloudflare.com \
+  --CDN skk.moe\
   --UUID_CONFIRM 20f7fca4-86e5-4ddf-9eed-24142073d197 \
   --SUBSCRIBE=true \
   --ARGO=true \
@@ -214,7 +223,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
   --START_PORT 8881 \
   --PORT_NGINX 60000 \
   --SERVER_IP 123.123.123.123 \
-  --CDN dash.cloudflare.com \
+  --CDN skk.moe\
   --UUID_CONFIRM 20f7fca4-86e5-4ddf-9eed-24142073d197 \
   --ARGO=true \
   --PORT_HOPPING_RANGE 50000:51000 \
@@ -233,7 +242,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
   --START_PORT 8881 \
   --PORT_NGINX 60000 \
   --SERVER_IP 123.123.123.123 \
-  --CDN dash.cloudflare.com \
+  --CDN skk.moe\
   --UUID_CONFIRM 20f7fca4-86e5-4ddf-9eed-24142073d197 \
   --SUBSCRIBE=true \
   --ARGO=true \
@@ -255,7 +264,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
   --START_PORT 8881 \
   --PORT_NGINX 60000 \
   --SERVER_IP 123.123.123.123 \
-  --CDN dash.cloudflare.com \
+  --CDN skk.moe\
   --UUID_CONFIRM 20f7fca4-86e5-4ddf-9eed-24142073d197 \
   --ARGO=true \
   --ARGO_DOMAIN=sb.argo.com \
@@ -276,7 +285,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
   --START_PORT 8881 \
   --PORT_NGINX 60000 \
   --SERVER_IP 123.123.123.123 \
-  --CDN dash.cloudflare.com \
+  --CDN skk.moe\
   --UUID_CONFIRM 20f7fca4-86e5-4ddf-9eed-24142073d197 \
   --SUBSCRIBE=true \
   --ARGO=true \
@@ -298,7 +307,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
   --START_PORT 8881 \
   --PORT_NGINX 60000 \
   --SERVER_IP 123.123.123.123 \
-  --CDN dash.cloudflare.com \
+  --CDN skk.moe\
   --UUID_CONFIRM 20f7fca4-86e5-4ddf-9eed-24142073d197 \
   --ARGO=true \
   --ARGO_DOMAIN=sb.argo.com \
@@ -313,7 +322,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-b
 | Key 大小写不敏感（Case Insensitive）| Value |
 | --------------- | ----------- |
 | --LANGUAGE | c=中文;  e=英文 |
-| --CHOOSE_PROTOCOLS | 可多选，如 bcdfk<br> a=全部<br> b=XTLS + reality<br> c=hysteria2<br> d=tuic<br> e=ShadowTLS<br> f=shadowsocks<br> g=trojan<br> h=vmess + ws<br> i=vless + ws + tls<br> j=H2 + reality<br> k=gRPC + reality |
+| --CHOOSE_PROTOCOLS | 可多选，如 bcdfk<br> a=全部<br> b=XTLS + reality<br> c=hysteria2<br> d=tuic<br> e=ShadowTLS<br> f=shadowsocks<br> g=trojan<br> h=vmess + ws<br> i=vless + ws + tls<br> j=H2 + reality<br> k=gRPC + reality<br> l=AnyTLS |
 | --START_PORT | 100 - 65520 |
 | --PORT_NGINX | n=不需要订阅，或者 100 - 65520 |
 | --SERVER_IP | IPv4 或 IPv6 地址，不需要中括号 |
@@ -375,6 +384,7 @@ docker run -dit \
     -e VLESS_WS=true \
     -e H2_REALITY=true \
     -e GRPC_REALITY=true \
+    -e ANYTLS=true \
     -e UUID=20f7fca4-86e5-4ddf-9eed-24142073d197 \
     -e CDN=www.csgo.com \
     -e NODE_NAME=sing-box \
@@ -417,6 +427,7 @@ services:
             - VLESS_WS=true
             - H2_REALITY=true
             - GRPC_REALITY=true
+            - ANYTLS=true
             - UUID=20f7fca4-86e5-4ddf-9eed-24142073d197 
             - CDN=www.csgo.com
             - NODE_NAME=sing-box
@@ -471,6 +482,7 @@ services:
 | -e VLESS_WS | 是 |        true 为启用 VLess over WebSocket 协议，不需要的话删除本参数或填 false |
 | -e H2_REALITY | 是 |      true 为启用 H2 over reality 协议，不需要的话删除本参数或填 false |
 | -e GRPC_REALITY | 是 |    true 为启用 gRPC over reality 协议，不需要的话删除本参数或填 false |
+| -e ANYTLS | 是 |          true 为启用 AnyTLS 协议，不需要的话删除本参数或填 false |
 | -e UUID | 否 | 不指定的话 UUID 将默认随机生成 |
 | -e CDN | 否 | 优选域名，不指定的话将使用 www.csgo.com |
 | -e NODE_NAME | 否 | 节点名称，不指定的话将使用 sing-box |
@@ -514,7 +526,8 @@ services:
 |   |-- 17_vmess-ws_inbounds.json            # vmess + ws 协议配置文件
 |   |-- 18_vless-ws-tls_inbounds.json        # vless + ws + tls 协议配置文件
 |   |-- 19_h2-reality_inbounds.json          # Reality http2 协议配置文件
-|   `-- 20_grpc-reality_inbounds.json        # Reality gRPC 协议配置文件
+|   |-- 20_grpc-reality_inbounds.json        # Reality gRPC 协议配置文件
+|   `-- 21_anytls_inbounds.json              # AnyTLS 协议配置文件
 |-- logs
 |   `-- box.log                              # sing-box 运行日志文件
 |-- subscribe                                # sing-box server 配置文件目录
@@ -544,7 +557,6 @@ services:
 
 ## 10.鸣谢下列作者的文章和项目:
 千歌 sing-box 模板: https://github.com/chika0801/sing-box-examples  
-瞎折腾 sing-box 模板: https://t.me/ztvps/100
 
 
 ## 11.免责声明:

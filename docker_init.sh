@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# 脚本更新日期 2024.12.20
+# 脚本更新日期 2025.04.05
 WORK_DIR=/sing-box
 PORT=$START_PORT
 SUBSCRIBE_TEMPLATE="https://raw.githubusercontent.com/fscarmen/client_template/main"
@@ -11,25 +11,32 @@ info() { echo -e "\033[32m\033[01m$*\033[0m"; }   # 绿色
 hint() { echo -e "\033[33m\033[01m$*\033[0m"; }   # 黄色
 
 # 判断系统架构，以下载相应的应用
-check_arch() {
-  case "$ARCH" in
-    arm64 )
-      SING_BOX_ARCH=arm64; JQ_ARCH=arm64; QRENCODE_ARCH=arm64; ARGO_ARCH=arm64
-      ;;
-    amd64 )
-      SING_BOX_ARCH=amd64
-      JQ_ARCH=amd64; QRENCODE_ARCH=amd64; ARGO_ARCH=amd64
-      ;;
-    armv7 )
-      SING_BOX_ARCH=armv7; JQ_ARCH=armhf; QRENCODE_ARCH=arm; ARGO_ARCH=arm
-      ;;
-  esac
-}
+case "$ARCH" in
+  arm64 )
+    SING_BOX_ARCH=arm64; JQ_ARCH=arm64; QRENCODE_ARCH=arm64; ARGO_ARCH=arm64
+    ;;
+  amd64 )
+    SING_BOX_ARCH=amd64
+    JQ_ARCH=amd64; QRENCODE_ARCH=amd64; ARGO_ARCH=amd64
+    ;;
+  armv7 )
+    SING_BOX_ARCH=armv7; JQ_ARCH=armhf; QRENCODE_ARCH=arm; ARGO_ARCH=arm
+    ;;
+esac
 
 # 检查 sing-box 最新版本
 check_latest_sing-box() {
-  local VERSION_LATEST=$(wget -qO- "https://api.github.com/repos/SagerNet/sing-box/releases" | awk -F '["v-]' '/tag_name/{print $5}' | sort -r | sed -n '1p')
-  wget -qO- "https://api.github.com/repos/SagerNet/sing-box/releases" | awk -F '["v]' -v var="tag_name.*$VERSION_LATEST" '$0 ~ var {print $5; exit}'
+  # 检查是否强制指定版本
+  local FORCE_VERSION=$(wget --no-check-certificate --tries=2 --timeout=3 -qO- https://raw.githubusercontent.com/fscarmen/sing-box/refs/heads/main/force_version | sed 's/^[vV]//g')
+
+  # 没有强制指定版本时，获取最新版本
+  grep -q '.' <<< "$FORCE_VERSION" || local FORCE_VERSION=$(wget --no-check-certificate --tries=2 --timeout=3 -qO- https://api.github.com/repos/SagerNet/sing-box/releases | awk -F '["v-]' '/tag_name/{print $5}' | sort -Vr | sed -n '1p')
+
+  # 获取最终版本号
+  local VERSION=$(wget --no-check-certificate --tries=2 --timeout=3 -qO- https://api.github.com/repos/SagerNet/sing-box/releases | awk -F '["v]' -v var="tag_name.*$FORCE_VERSION" '$0 ~ var {print $5; exit}')
+  VERSION=${VERSION:-'1.12.0-beta.1'}
+
+  echo "$VERSION"
 }
 
 # 安装 sing-box 容器
@@ -37,7 +44,6 @@ install() {
   # 下载 sing-box
   echo "正在下载 sing-box ..."
   local ONLINE=$(check_latest_sing-box)
-  local ONLINE=${ONLINE:-'1.11.0-beta.15'}
   wget https://github.com/SagerNet/sing-box/releases/download/v$ONLINE/sing-box-$ONLINE-linux-$SING_BOX_ARCH.tar.gz -O- | tar xz -C ${WORK_DIR} sing-box-$ONLINE-linux-$SING_BOX_ARCH/sing-box && mv ${WORK_DIR}/sing-box-$ONLINE-linux-$SING_BOX_ARCH/sing-box ${WORK_DIR}/sing-box && rm -rf ${WORK_DIR}/sing-box-$ONLINE-linux-$SING_BOX_ARCH
 
   # 下载 jq
@@ -52,11 +58,15 @@ install() {
   echo "正在下载 cloudflared ..."
   wget -O ${WORK_DIR}/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARGO_ARCH && chmod +x ${WORK_DIR}/cloudflared
 
+  # 检查系统是否已经安装 tcp-brutal
+  IS_BRUTAL=false && [ -x "$(type -p lsmod)" ] && lsmod | grep -q brutal && IS_BRUTAL=true
+  [ "$IS_BRUTAL" = 'false' ] && [ -x "$(type -p modprobe)" ] && modprobe brutal 2>/dev/null && IS_BRUTAL=true
+
   # 生成 sing-box 配置文件
   if [[ "$SERVER_IP" =~ : ]]; then
-    local DOMAIN_STRATEG=prefer_ipv6
+    local STRATEGY=prefer_ipv6
   else
-    local DOMAIN_STRATEG=prefer_ipv4
+    local STRATEGY=ipv4_only
   fi
 
   local REALITY_KEYPAIR=$(${WORK_DIR}/sing-box generate reality-keypair) && REALITY_PRIVATE=$(awk '/PrivateKey/{print $NF}' <<< "$REALITY_KEYPAIR") && REALITY_PUBLIC=$(awk '/PublicKey/{print $NF}' <<< "$REALITY_KEYPAIR")
@@ -102,8 +112,7 @@ EOF
     "outbounds":[
         {
             "type":"direct",
-            "tag":"direct",
-            "domain_strategy":"$DOMAIN_STRATEG"
+            "tag":"direct"
         }
     ]
 }
@@ -205,9 +214,10 @@ EOF
     "dns":{
         "servers":[
             {
-                "address":"local"
+                "type":"local"
             }
-        ]
+        ],
+        "strategy": "${STRATEGY}"
     }
 }
 EOF
@@ -259,7 +269,7 @@ EOF
                 "enabled":true,
                 "padding":true,
                 "brutal":{
-                    "enabled":true,
+                    "enabled":${IS_BRUTAL},
                     "up_mbps":1000,
                     "down_mbps":1000
                 }
@@ -363,7 +373,7 @@ EOF
                 "enabled":true,
                 "padding":true,
                 "brutal":{
-                    "enabled":true,
+                    "enabled":${IS_BRUTAL},
                     "up_mbps":1000,
                     "down_mbps":1000
                 }
@@ -388,7 +398,7 @@ EOF
                 "enabled":true,
                 "padding":true,
                 "brutal":{
-                    "enabled":true,
+                    "enabled":${IS_BRUTAL},
                     "up_mbps":1000,
                     "down_mbps":1000
                 }
@@ -421,7 +431,7 @@ EOF
                 "enabled":true,
                 "padding":true,
                 "brutal":{
-                    "enabled":true,
+                    "enabled":${IS_BRUTAL},
                     "up_mbps":1000,
                     "down_mbps":1000
                 }
@@ -459,7 +469,7 @@ EOF
                 "enabled":true,
                 "padding":true,
                 "brutal":{
-                    "enabled":true,
+                    "enabled":${IS_BRUTAL},
                     "up_mbps":1000,
                     "down_mbps":1000
                 }
@@ -497,7 +507,7 @@ EOF
                 "enabled":true,
                 "padding":true,
                 "brutal":{
-                    "enabled":true,
+                    "enabled":${IS_BRUTAL},
                     "up_mbps":1000,
                     "down_mbps":1000
                 }
@@ -544,7 +554,7 @@ EOF
                 "enabled":true,
                 "padding":true,
                 "brutal":{
-                    "enabled":true,
+                    "enabled":${IS_BRUTAL},
                     "up_mbps":1000,
                     "down_mbps":1000
                 }
@@ -594,10 +604,35 @@ EOF
                 "enabled":true,
                 "padding":true,
                 "brutal":{
-                    "enabled":true,
+                    "enabled":${IS_BRUTAL},
                     "up_mbps":1000,
                     "down_mbps":1000
                 }
+            }
+        }
+    ]
+}
+EOF
+
+  # 生成 AnyTLS 配置
+  [ "${ANYTLS}" = 'true' ] && ((PORT++)) && PORT_ANYTLS=$PORT && cat > ${WORK_DIR}/conf/21_anytls_inbounds.json << EOF
+{
+    "inbounds":[
+        {
+            "type":"anytls",
+            "tag":"${NODE_NAME} anytls",
+            "listen":"::",
+            "listen_port":$PORT_ANYTLS,
+            "users":[
+                {
+                    "password":"${UUID}"
+                }
+            ],
+            "padding_scheme":[],
+            "tls":{
+                "enabled":true,
+                "certificate_path":"${WORK_DIR}/cert/cert.pem",
+                "key_path":"${WORK_DIR}/cert/private.key"
             }
         }
     ]
@@ -789,7 +824,7 @@ stdout_logfile=/dev/null
   # 生成 Clash proxy providers 订阅文件
   local CLASH_SUBSCRIBE='proxies:'
 
-  [ "${XTLS_REALITY}" = 'true' ] && local CLASH_XTLS_REALITY="- {name: \"${NODE_NAME} xtls-reality\", type: vless, server: ${SERVER_IP}, port: ${PORT_XTLS_REALITY}, uuid: ${UUID}, network: tcp, udp: true, tls: true, servername: addons.mozilla.org, client-fingerprint: chrome, reality-opts: {public-key: ${REALITY_PUBLIC}, short-id: \"\"}, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
+  [ "${XTLS_REALITY}" = 'true' ] && local CLASH_XTLS_REALITY="- {name: \"${NODE_NAME} xtls-reality\", type: vless, server: ${SERVER_IP}, port: ${PORT_XTLS_REALITY}, uuid: ${UUID}, network: tcp, udp: true, tls: true, servername: addons.mozilla.org, client-fingerprint: chrome, reality-opts: {public-key: ${REALITY_PUBLIC}, short-id: \"\"}, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false }, brutal-opts: { enabled: ${IS_BRUTAL}, up: '1000 Mbps', down: '1000 Mbps' } }" &&
   local CLASH_SUBSCRIBE+="
   $CLASH_XTLS_REALITY
 "
@@ -801,33 +836,38 @@ stdout_logfile=/dev/null
   local CLASH_SUBSCRIBE+="
   $CLASH_TUIC
 "
-  [ "${SHADOWTLS}" = 'true' ] && local CLASH_SHADOWTLS="- {name: \"${NODE_NAME} ShadowTLS\", type: ss, server: ${SERVER_IP}, port: ${PORT_SHADOWTLS}, cipher: 2022-blake3-aes-128-gcm, password: ${SHADOWTLS_PASSWORD}, plugin: shadow-tls, client-fingerprint: chrome, plugin-opts: {host: addons.mozilla.org, password: \"${UUID}\", version: 3}, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
+  [ "${SHADOWTLS}" = 'true' ] && local CLASH_SHADOWTLS="- {name: \"${NODE_NAME} ShadowTLS\", type: ss, server: ${SERVER_IP}, port: ${PORT_SHADOWTLS}, cipher: 2022-blake3-aes-128-gcm, password: ${SHADOWTLS_PASSWORD}, plugin: shadow-tls, client-fingerprint: chrome, plugin-opts: {host: addons.mozilla.org, password: \"${UUID}\", version: 3}, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false }, brutal-opts: { enabled: ${IS_BRUTAL}, up: '1000 Mbps', down: '1000 Mbps' } }" &&
   local CLASH_SUBSCRIBE+="
   $CLASH_SHADOWTLS
 "
-  [ "${SHADOWSOCKS}" = 'true' ] && local CLASH_SHADOWSOCKS="- {name: \"${NODE_NAME} shadowsocks\", type: ss, server: ${SERVER_IP}, port: $PORT_SHADOWSOCKS, cipher: aes-128-gcm, password: ${UUID}, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
+  [ "${SHADOWSOCKS}" = 'true' ] && local CLASH_SHADOWSOCKS="- {name: \"${NODE_NAME} shadowsocks\", type: ss, server: ${SERVER_IP}, port: $PORT_SHADOWSOCKS, cipher: aes-128-gcm, password: ${UUID}, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false }, brutal-opts: { enabled: ${IS_BRUTAL}, up: '1000 Mbps', down: '1000 Mbps' } }" &&
   local CLASH_SUBSCRIBE+="
   $CLASH_SHADOWSOCKS
 "
-  [ "${TROJAN}" = 'true' ] && local CLASH_TROJAN="- {name: \"${NODE_NAME} trojan\", type: trojan, server: ${SERVER_IP}, port: $PORT_TROJAN, password: ${UUID}, client-fingerprint: random, skip-cert-verify: true, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
+  [ "${TROJAN}" = 'true' ] && local CLASH_TROJAN="- {name: \"${NODE_NAME} trojan\", type: trojan, server: ${SERVER_IP}, port: $PORT_TROJAN, password: ${UUID}, client-fingerprint: random, skip-cert-verify: true, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false }, brutal-opts: { enabled: ${IS_BRUTAL}, up: '1000 Mbps', down: '1000 Mbps' } }" &&
   local CLASH_SUBSCRIBE+="
   $CLASH_TROJAN
 "
-  [ "${VMESS_WS}" = 'true' ] && local CLASH_VMESS_WS="- {name: \"${NODE_NAME} vmess-ws\", type: vmess, server: ${CDN}, port: 80, uuid: ${UUID}, udp: true, tls: false, alterId: 0, cipher: auto, skip-cert-verify: true, network: ws, ws-opts: { path: \"/${UUID}-vmess\", headers: {Host: ${ARGO_DOMAIN}} }, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
+  [ "${VMESS_WS}" = 'true' ] && local CLASH_VMESS_WS="- {name: \"${NODE_NAME} vmess-ws\", type: vmess, server: ${CDN}, port: 80, uuid: ${UUID}, udp: true, tls: false, alterId: 0, cipher: auto, skip-cert-verify: true, network: ws, ws-opts: { path: \"/${UUID}-vmess\", headers: {Host: ${ARGO_DOMAIN}} }, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false }, brutal-opts: { enabled: ${IS_BRUTAL}, up: '1000 Mbps', down: '1000 Mbps' } }" &&
   local CLASH_SUBSCRIBE+="
   $CLASH_VMESS_WS
 "
-  [ "${VLESS_WS}" = 'true' ] && local CLASH_VLESS_WS="- {name: \"${NODE_NAME} vless-ws-tls\", type: vless, server: ${CDN}, port: 443, uuid: ${UUID}, udp: true, tls: true, servername: ${ARGO_DOMAIN}, network: ws, skip-cert-verify: true, ws-opts: { path: \"/${UUID}-vless\", headers: {Host: ${ARGO_DOMAIN}}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol }, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
+  [ "${VLESS_WS}" = 'true' ] && local CLASH_VLESS_WS="- {name: \"${NODE_NAME} vless-ws-tls\", type: vless, server: ${CDN}, port: 443, uuid: ${UUID}, udp: true, tls: true, servername: ${ARGO_DOMAIN}, network: ws, skip-cert-verify: true, ws-opts: { path: \"/${UUID}-vless\", headers: {Host: ${ARGO_DOMAIN}}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol }, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false }, brutal-opts: { enabled: ${IS_BRUTAL}, up: '1000 Mbps', down: '1000 Mbps' } }" &&
   local CLASH_SUBSCRIBE+="
   $CLASH_VLESS_WS
 "
   # Clash 的 H2 传输层未实现多路复用功能，在 Clash.Meta 中更建议使用 gRPC 协议，故不输出相关配置。 https://wiki.metacubex.one/config/proxies/vless/
   [ "${H2_REALITY}" = 'true' ]
 
-  [ "${GRPC_REALITY}" = 'true' ] && local CLASH_GRPC_REALITY="- {name: \"${NODE_NAME} grpc-reality\", type: vless, server: ${SERVER_IP}, port: ${PORT_GRPC_REALITY}, uuid: ${UUID}, network: grpc, tls: true, udp: true, flow:, client-fingerprint: chrome, servername: addons.mozilla.org, grpc-opts: {  grpc-service-name: \"grpc\" }, reality-opts: { public-key: ${REALITY_PUBLIC}, short-id: \"\" }, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
+  [ "${GRPC_REALITY}" = 'true' ] && local CLASH_GRPC_REALITY="- {name: \"${NODE_NAME} grpc-reality\", type: vless, server: ${SERVER_IP}, port: ${PORT_GRPC_REALITY}, uuid: ${UUID}, network: grpc, tls: true, udp: true, flow:, client-fingerprint: chrome, servername: addons.mozilla.org, grpc-opts: {  grpc-service-name: \"grpc\" }, reality-opts: { public-key: ${REALITY_PUBLIC}, short-id: \"\" }, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false }, brutal-opts: { enabled: ${IS_BRUTAL}, up: '1000 Mbps', down: '1000 Mbps' } }" &&
   local CLASH_SUBSCRIBE+="
   $CLASH_GRPC_REALITY
 "
+  [ "${ANYTLS}" = 'true' ] && local CLASH_ANYTLS="- {name: \"${NODE_NAME} anytls\", type: anytls, server: ${SERVER_IP}, port: $PORT_ANYTLS, password: ${UUID}, client-fingerprint: chrome, udp: true, idle-session-check-interval: 30, idle-session-timeout: 30, skip-cert-verify: true }" &&
+  local CLASH_SUBSCRIBE+="
+  $CLASH_ANYTLS
+"
+
   echo -n "${CLASH_SUBSCRIBE}" | sed -E '/^[ ]*#|^--/d' | sed '/^$/d' > ${WORK_DIR}/subscribe/proxies
 
   # 生成 clash 订阅配置文件
@@ -868,6 +908,9 @@ vless://$(echo -n auto:${UUID}@${SERVER_IP_2}:${PORT_H2_REALITY} | base64 -w0)?r
   [ "${GRPC_REALITY}" = 'true' ] && local SHADOWROCKET_SUBSCRIBE+="
 vless://$(echo -n "auto:${UUID}@${SERVER_IP_2}:${PORT_GRPC_REALITY}" | base64 -w0)?remarks=${NODE_NAME}%20grpc-reality&path=grpc&obfs=grpc&tls=1&peer=addons.mozilla.org&pbk=${REALITY_PUBLIC}
 "
+  [ "${PORT_ANYTLS}" = 'true' ] && local SHADOWROCKET_SUBSCRIBE+="
+anytls://${UUID]}@${SERVER_IP_1}:${PORT_ANYTLS}?insecure=1&udp=1#${NODE_NAME}%20&anytls
+"
   echo -n "$SHADOWROCKET_SUBSCRIBE" | sed -E '/^[ ]*#|^--/d' | sed '/^$/d' | base64 -w0 > ${WORK_DIR}/subscribe/shadowrocket
 
   # 生成 V2rayN 订阅文件
@@ -895,7 +938,6 @@ tuic://${UUID}:${UUID}@${SERVER_IP_1}:${PORT_TUIC}?alpn=h3&congestion_control=bb
   },
   \"inbounds\":[
       {
-          \"domain_strategy\":\"\",
           \"listen\":\"127.0.0.1\",
           \"listen_port\":${PORT_SHADOWTLS},
           \"sniff\":true,
@@ -907,7 +949,6 @@ tuic://${UUID}:${UUID}@${SERVER_IP_1}:${PORT_TUIC}?alpn=h3&congestion_control=bb
   \"outbounds\":[
       {
           \"detour\":\"shadowtls-out\",
-          \"domain_strategy\":\"\",
           \"method\":\"2022-blake3-aes-128-gcm\",
           \"password\":\"${SHADOWTLS_PASSWORD}\",
           \"type\":\"shadowsocks\",
@@ -921,7 +962,6 @@ tuic://${UUID}:${UUID}@${SERVER_IP_1}:${PORT_TUIC}?alpn=h3&congestion_control=bb
           }
       },
       {
-          \"domain_strategy\":\"\",
           \"password\":\"${UUID}\",
           \"server\":\"${SERVER_IP}\",
           \"server_port\":${PORT_SHADOWTLS},
@@ -966,6 +1006,43 @@ vless://${UUID}@${SERVER_IP_1}:${PORT_H2_REALITY}?encryption=none&security=reali
   [ "${GRPC_REALITY}" = 'true' ] && local V2RAYN_SUBSCRIBE+="
 ----------------------------
 vless://${UUID}@${SERVER_IP_1}:${PORT_GRPC_REALITY}?encryption=none&security=reality&sni=addons.mozilla.org&fp=chrome&pbk=${REALITY_PUBLIC}&type=grpc&serviceName=grpc&mode=gun#${NODE_NAME// /%20}%20grpc-reality"
+
+  [ "${ANYTLS}" = 'true' ] && local V2RAYN_SUBSCRIBE+="
+----------------------------
+# $(info "AnyTLS 配置文件内容，需要更新 sing_box 内核")
+
+{
+    \"log\":{
+        \"level\":\"warn\"
+    },
+    \"inbounds\":[
+        {
+            \"listen\":\"127.0.0.1\",
+            \"listen_port\":${PORT_ANYTLS},
+            \"sniff\":true,
+            \"sniff_override_destination\":false,
+            \"tag\": \"AnyTLS\",
+            \"type\":\"mixed\"
+        }
+    ],
+    \"outbounds\":[
+        {
+            \"type\": \"anytls\",
+            \"tag\": \"${NODE_NAME} anytls\",
+            \"server\": \"${SERVER_IP}\",
+            \"server_port\": ${PORT_ANYTLS},
+            \"password\": \"${UUID}\",
+            \"idle_session_check_interval\": \"30s\",
+            \"idle_session_timeout\": \"30s\",
+            \"min_idle_session\": 5,
+            \"tls\": {
+              \"enabled\": true,
+              \"insecure\": true,
+              \"server_name\": \"\"
+            }
+        }
+    ]
+}"
 
   echo -n "$V2RAYN_SUBSCRIBE" | sed -E '/^[ ]*#|^[ ]+|^--|^\{|^\}/d' | sed '/^$/d' | base64 -w0 > ${WORK_DIR}/subscribe/v2rayn
 
@@ -1059,6 +1136,10 @@ vless://${UUID}@${SERVER_IP_1}:${PORT_GRPC_REALITY}?security=reality&sni=addons.
   local INBOUND_REPLACE+=" { \"type\": \"vless\", \"tag\": \"${NODE_NAME} grpc-reality\", \"server\": \"${SERVER_IP}\", \"server_port\": ${PORT_GRPC_REALITY}, \"uuid\":\"${UUID}\", \"tls\": { \"enabled\":true, \"server_name\":\"addons.mozilla.org\", \"utls\": { \"enabled\":true, \"fingerprint\":\"chrome\" }, \"reality\":{ \"enabled\":true, \"public_key\":\"${REALITY_PUBLIC}\", \"short_id\":\"\" } }, \"packet_encoding\": \"xudp\", \"transport\": { \"type\": \"grpc\", \"service_name\": \"grpc\" } }," &&
   local NODE_REPLACE+="\"${NODE_NAME} grpc-reality\","
 
+  [ "${ANYTLS}" = 'true' ] &&
+  local INBOUND_REPLACE+=" { \"type\": \"anytls\", \"tag\": \"${NODE_NAME} anytls\", \"server\": \"${SERVER_IP}\", \"server_port\": ${PORT_ANYTLS}, \"password\": \"${UUID}\", \"idle_session_check_interval\": \"30s\", \"idle_session_timeout\": \"30s\", \"min_idle_session\": 5, \"tls\": { \"enabled\": true, \"insecure\": true, \"server_name\": \"\" } }," &&
+  local NODE_REPLACE+="\"${NODE_NAME} anytls\","
+
   # 模板
   local SING_BOX_JSON1=$(wget -qO- --tries=3 --timeout=2 ${SUBSCRIBE_TEMPLATE}/sing-box1)
 
@@ -1101,7 +1182,7 @@ $(hint "${SHADOWROCKET_SUBSCRIBE}")
 *******************************************
 ┌────────────────┐
 │                │
-│   $(warning "Clash Meta")   │
+│   $(warning "Clash Verge")  │
 │                │
 └────────────────┘
 ----------------------------
@@ -1126,7 +1207,7 @@ $(hint "${NEKOBOX_SUBSCRIBE}")
 
 $(info "$(echo "{ \"outbounds\":[ ${INBOUND_REPLACE%,} ] }" | ${WORK_DIR}/jq)
 
-各客户端配置文件路径: ${WORK_DIR}/subscribe/\n 完整模板可参照:\n https://t.me/ztvps/100\n https://github.com/chika0801/sing-box-examples/tree/main/Tun")
+各客户端配置文件路径: ${WORK_DIR}/subscribe/\n 完整模板可参照:\n https://github.com/chika0801/sing-box-examples/tree/main/Tun")
 "
 
 EXPORT_LIST_FILE+="
@@ -1177,12 +1258,14 @@ $(${WORK_DIR}/qrencode https://${ARGO_DOMAIN}/${UUID}/auto)
 
   # 显示脚本使用情况数据
   hint "\n*******************************************\n"
+  local STAT=$(wget -qO- --timeout=3 "https://stat-api.netlify.app/updateStats?script=sing-box-docker.sh")
+  [[ "$STAT" =~ \"todayCount\":([0-9]+),\"totalCount\":([0-9]+) ]] && local TODAY="${BASH_REMATCH[1]}" && local TOTAL="${BASH_REMATCH[2]}"
+  hint "\n 脚本当天运行次数: $TODAY，累计运行次数: $TOTAL \n"
 }
 
 # Sing-box 的最新版本
 update_sing-box() {
-  #####local ONLINE=$(check_latest_sing-box)
-  local ONLINE='1.11.0-alpha.6'
+  local ONLINE=$(check_latest_sing-box)
   local LOCAL=$(${WORK_DIR}/sing-box version | awk '/version/{print $NF}')
   if [ -n "$ONLINE" ]; then
     if [[ "$ONLINE" != "$LOCAL" ]]; then
@@ -1207,8 +1290,6 @@ while getopts ":Vv" OPTNAME; do
 done
 
 # 主流程
-check_arch
-
 case "$ACTION" in
   update )
     update_sing-box
